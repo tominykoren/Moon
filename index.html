@@ -1,234 +1,380 @@
-/**
- * פונקציית GET לבדיקת זמינות השרת
- * מחזירה אישור טקסטואלי פשוט שהמערכת באוויר.
- */
-function doGet(e) {
-  return ContentService.createTextOutput("השרת עובד בהצלחה!");
-}
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת חילוץ נתונים פיננסיים מתקדמת</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Heebo', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
 
-/**
- * פונקציית העזר להמרת תאריכים לפורמט YYYY-MM-DD
- * מבטיחה אחידות במפתח התאריכים (dateMap) בין מקורות שונים
- */
-function formatUniformDate(dateStringOrObj) {
-  let d = new Date(dateStringOrObj);
-  if (isNaN(d.getTime())) return null;
-  let month = '' + (d.getMonth() + 1);
-  let day = '' + d.getDate();
-  let year = d.getFullYear();
-  if (month.length < 2) month = '0' + month;
-  if (day.length < 2) day = '0' + day;
-  return [year, month, day].join('-');
-}
-
-/**
- * פונקציית POST המרכזית
- * אוספת נתונים מיאהו (או גוגל), מסדרת אותם בתצוגת ציר-זמן רוחבית (Pivot),
- * ומחזירה כ-CSV או גיליון.
- */
-function doPost(e) {
-  try {
-    // --- 1. פענוח בטוח של המידע (CRITICAL Payload Parsing) ---
-    let params = {};
-    try {
-      const raw = e && e.postData && e.postData.contents 
-                  ? e.postData.contents 
-                  : (e && e.postData && e.postData.getDataAsString ? e.postData.getDataAsString() : "{}");
-      params = JSON.parse(raw);
-    } catch(err) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "error", 
-        message: "Parse failed: " + err.message
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // וידוא חובה של המפתחות המדויקים
-    const { tickers, startDate, endDate, frequency, action } = params;
-    if (!tickers || !startDate || !endDate || !frequency || !action) {
-      throw new Error("Missing parameters. Received: " + JSON.stringify(params));
-    }
-
-    // --- 2. הכנת הנתונים והמשתנים ---
-    // פיצול המניות, ניקוי רווחים והמרה לאותיות גדולות
-    const tickersArray = tickers.split(",").map(t => t.trim().toUpperCase()).filter(t => t.length > 0);
-    
-    // אובייקט לאחסון מחירי מניות לפי תאריך (המפתח יהיה התאריך)
-    // מבנה: { "2023-01-01": { "AAPL": 150.5, "MSFT": 250.2 }, ... }
-    const dateMap = {};
-
-    // התאמת פרמטר התדירות עבור Yahoo ו-Google
-    const freq = frequency.toLowerCase();
-    let yahooFreq = "1d";
-    let gfFreq = "DAILY";
-    if (freq === "weekly") {
-      yahooFreq = "1wk"; gfFreq = "WEEKLY";
-    } else if (freq === "monthly") {
-      yahooFreq = "1mo"; gfFreq = "WEEKLY"; // Google Finance לא תומך היסטורית בחודשי
-    }
-
-    // חותמות זמן ליאהו (תיקון ל-UTC כדי למנוע סטיות תאריכים)
-    const period1 = Math.floor(new Date(startDate + "T00:00:00Z").getTime() / 1000);
-    const period2 = Math.floor(new Date(endDate + "T23:59:59Z").getTime() / 1000);
-
-    // --- 3. לולאת איסוף הנתונים לכל מניה ---
-    for (let i = 0; i < tickersArray.length; i++) {
-      const ticker = tickersArray[i];
-
-      try {
-        // --- ניסיון ראשון: Yahoo Finance ---
-        const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/download/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=${yahooFreq}&events=history&includeAdjustedClose=true`;
-        
-        const response = UrlFetchApp.fetch(yahooUrl, { muteHttpExceptions: true });
-        if (response.getResponseCode() !== 200) {
-          throw new Error(`Yahoo Finance Error: ${response.getResponseCode()}`);
+        /* Animated Futuristic Background */
+        .bg-mesh {
+            background: linear-gradient(-45deg, #020617, #1e1b4b, #0f172a, #172554);
+            background-size: 400% 400%;
+            animation: meshGradient 15s ease infinite;
+            position: relative;
+        }
+        @keyframes meshGradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
 
-        const csvContent = response.getContentText();
-        const parsedCsv = Utilities.parseCsv(csvContent);
-        
-        if (parsedCsv.length < 2) throw new Error("No data returned from Yahoo");
+        /* Subtle floating particles/orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.4;
+            animation: floatOrb 12s infinite ease-in-out alternate;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .orb-1 { width: 500px; height: 500px; background: #4f46e5; top: -150px; right: -100px; }
+        .orb-2 { width: 400px; height: 400px; background: #06b6d4; bottom: -100px; left: -100px; animation-delay: -6s; }
 
-        // איתור העמודות הרלוונטיות דינמית
-        const header = parsedCsv[0];
-        let dateIdx = header.indexOf("Date");
-        let closeIdx = header.indexOf("Adj Close");
-        if (closeIdx === -1) closeIdx = header.indexOf("Close"); // גיבוי אם אין מחיר מתואם
+        /* Custom Scrollbar for Data Table */
+        .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 8px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 8px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 
-        if (dateIdx === -1 || closeIdx === -1) throw new Error("Missing Date or Close columns in Yahoo CSV");
+        /* Input styling overrides for glassmorphism */
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; opacity: 0.7; transition: opacity 0.2s; }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
-        // מעבר על השורות ואיכלוס ה-dateMap
-        for (let j = 1; j < parsedCsv.length; j++) {
-          const row = parsedCsv[j];
-          if (row.length <= Math.max(dateIdx, closeIdx)) continue;
-          
-          let dateStr = formatUniformDate(row[dateIdx]);
-          let price = row[closeIdx];
-          
-          // דילוג על שורות ריקות (ימי חג ביאהו מחזירים null)
-          if (!dateStr || price === "null" || price === "") continue;
+        /* Animations */
+        .animate-fade-in { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-slide-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-          // אתחול התאריך ב-Map אם טרם קיים
-          if (!dateMap[dateStr]) dateMap[dateStr] = {};
-          dateMap[dateStr][ticker] = price;
+        /* Glowing Button Effect */
+        .glow-btn {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s ease;
+        }
+        .glow-btn:hover:not(:disabled) {
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.8);
+            transform: translateY(-2px);
+        }
+        .glow-btn:disabled {
+            filter: grayscale(100%);
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.6;
         }
 
-      } catch (yahooError) {
-        // --- ניסיון גיבוי: Google Finance ---
-        let tempSpreadsheetFile = null;
-        try {
-          const tempSpreadsheet = SpreadsheetApp.create(`TempDataFetch_${ticker}`);
-          tempSpreadsheetFile = DriveApp.getFileById(tempSpreadsheet.getId());
-          const tempSheet = tempSpreadsheet.getSheets()[0];
-          
-          // יצירת הנוסחה המיוחדת של גוגל פיננס
-          const sParts = startDate.split("-");
-          const eParts = endDate.split("-");
-          const formula = `=GOOGLEFINANCE("${ticker}", "price", DATE(${sParts[0]},${sParts[1]},${sParts[2]}), DATE(${eParts[0]},${eParts[1]},${eParts[2]}), "${gfFreq}")`;
-          
-          tempSheet.getRange("A1").setFormula(formula);
-          SpreadsheetApp.flush();
-          
-          let gfData = null;
-          // המתנה לאכלוס הנתונים (מניעת קריאת Loading)
-          for (let retry = 0; retry < 6; retry++) {
-            Utilities.sleep(2000);
-            gfData = tempSheet.getDataRange().getValues();
-            if (gfData.length > 1 && gfData[0][0] !== "#N/A" && gfData[0][0] !== "Loading..." && gfData[0][0] !== "#ERROR!") break;
-          }
+        /* Modern Loader */
+        .loader-ring {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top-color: #60a5fa;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-mesh min-h-screen text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8 overflow-x-hidden">
 
-          if (gfData && gfData.length > 1 && gfData[0][0] !== "#N/A" && gfData[0][0] !== "Loading...") {
-            // דילוג על הכותרת (k=1)
-            for (let k = 1; k < gfData.length; k++) {
-              let dateStr = formatUniformDate(gfData[k][0]);
-              let price = gfData[k][1];
-              
-              if (!dateStr || price === "" || price === null) continue;
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
 
-              if (!dateMap[dateStr]) dateMap[dateStr] = {};
-              dateMap[dateStr][ticker] = price;
+    <main class="relative z-10 w-full max-w-6xl backdrop-blur-2xl bg-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] border border-white/20 rounded-[2rem] p-8 md:p-12 animate-slide-up">
+        
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight bg-clip-text text-transparent bg-gradient-to-l from-blue-400 via-indigo-300 to-cyan-300 drop-shadow-sm">
+                מערכת חילוץ נתונים פיננסיים
+            </h1>
+            <p class="text-lg md:text-xl text-indigo-100/90 font-light max-w-3xl mx-auto leading-relaxed">
+                ברוכים הבאים למערכת חילוץ הנתונים. כאן תוכלו לשלוף שערי סגירה למספר מניות במקביל, להשוות ביניהן בסדרות-זמן, ולייצא בקליק.
+            </p>
+        </header>
+
+        <form id="financeForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            
+            <div class="flex flex-col group">
+                <label for="tickers" class="text-sm font-semibold text-indigo-200 mb-2 transition-colors group-focus-within:text-white">סימולי מניות</label>
+                <input type="text" id="tickers" placeholder="AAPL, MSFT, TSLA" autocomplete="off"
+                    class="w-full px-5 py-4 rounded-xl bg-slate-900/40 border border-slate-700/50 text-white placeholder-slate-500 focus:bg-slate-900/80 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition-all dir-ltr text-left font-mono uppercase shadow-inner">
+                <span class="text-xs text-slate-400 mt-2 font-medium">הזן סימולי מניות, מופרדים בפסיק</span>
+            </div>
+
+            <div class="flex flex-col group">
+                <label for="startDate" class="text-sm font-semibold text-indigo-200 mb-2 transition-colors group-focus-within:text-white">תאריך התחלה</label>
+                <input type="date" id="startDate" 
+                    class="w-full px-5 py-4 rounded-xl bg-slate-900/40 border border-slate-700/50 text-white focus:bg-slate-900/80 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition-all shadow-inner font-mono">
+            </div>
+
+            <div class="flex flex-col group">
+                <label for="endDate" class="text-sm font-semibold text-indigo-200 mb-2 transition-colors group-focus-within:text-white">תאריך סיום</label>
+                <input type="date" id="endDate" 
+                    class="w-full px-5 py-4 rounded-xl bg-slate-900/40 border border-slate-700/50 text-white focus:bg-slate-900/80 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition-all shadow-inner font-mono">
+            </div>
+
+            <div class="flex flex-col group">
+                <label for="frequency" class="text-sm font-semibold text-indigo-200 mb-2 transition-colors group-focus-within:text-white">תדירות דגימה</label>
+                <select id="frequency" 
+                    class="w-full px-5 py-4 rounded-xl bg-slate-900/40 border border-slate-700/50 text-white focus:bg-slate-900/80 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition-all shadow-inner appearance-none cursor-pointer">
+                    <option value="daily" class="bg-slate-800">יומית (Daily)</option>
+                    <option value="weekly" class="bg-slate-800">שבועית (Weekly)</option>
+                    <option value="monthly" class="bg-slate-800">חודשית (Monthly)</option>
+                </select>
+            </div>
+        </form>
+
+        <div class="flex justify-center mb-10">
+            <button type="button" id="loadBtn" 
+                class="glow-btn relative overflow-hidden bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-bold text-xl py-4 px-16 rounded-2xl w-full sm:w-auto flex items-center justify-center gap-3">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span>טען נתונים</span>
+            </button>
+        </div>
+
+        <div id="alertContainer" class="hidden mb-8 p-5 bg-red-500/20 border border-red-500/50 rounded-xl backdrop-blur-md text-red-100 flex items-start gap-4 animate-fade-in">
+            <svg class="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <div id="alertText" class="font-medium"></div>
+        </div>
+
+        <div id="loaderContainer" class="hidden flex-col items-center justify-center py-10 animate-fade-in">
+            <div class="loader-ring mb-6"></div>
+            <h3 id="loaderText" class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-200 to-indigo-100 tracking-wide">מושך נתוני שוק...</h3>
+        </div>
+
+        <div id="previewContainer" class="hidden animate-slide-up mt-8">
+            <div class="flex items-center justify-between mb-4 pr-2">
+                <h2 class="text-2xl font-bold text-white tracking-wide">תצוגה מקדימה <span class="text-sm font-normal text-indigo-300 ml-2">(6 רשומות ראשונות)</span></h2>
+            </div>
+            <div class="overflow-x-auto custom-scroll bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl">
+                <table id="dataTable" class="min-w-full text-sm text-left dir-ltr">
+                    </table>
+            </div>
+        </div>
+
+        <div id="exportContainer" class="hidden mt-10 pt-8 border-t border-slate-700/50 animate-fade-in">
+            <div class="flex flex-col sm:flex-row justify-center gap-6">
+                <button type="button" id="btnCsv" class="flex-1 sm:max-w-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 hover:-translate-y-1">
+                    <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    הורד כ-CSV
+                </button>
+                <button type="button" id="btnSheet" class="flex-1 sm:max-w-xs bg-emerald-600/90 hover:bg-emerald-500 border border-emerald-500/50 text-white font-bold py-4 px-6 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all flex items-center justify-center gap-3 hover:-translate-y-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    ייצא ל-Google Sheets
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Configuration
+        const API_URL = "https://script.google.com/macros/s/AKfycbxH_ciaRv67DkxkKyn2LWpW1yw-Dq79ft1DMXa4ybQ42VKhLnvacN8MICcueDZIIncu2w/exec";
+        let globalCsvData = "";
+
+        // DOM Elements
+        const elTickers = document.getElementById('tickers');
+        const elStartDate = document.getElementById('startDate');
+        const elEndDate = document.getElementById('endDate');
+        const elFrequency = document.getElementById('frequency');
+        
+        const loadBtn = document.getElementById('loadBtn');
+        const alertContainer = document.getElementById('alertContainer');
+        const alertText = document.getElementById('alertText');
+        const loaderContainer = document.getElementById('loaderContainer');
+        const loaderText = document.getElementById('loaderText');
+        const previewContainer = document.getElementById('previewContainer');
+        const dataTable = document.getElementById('dataTable');
+        const exportContainer = document.getElementById('exportContainer');
+        const btnCsv = document.getElementById('btnCsv');
+        const btnSheet = document.getElementById('btnSheet');
+
+        // UI Helpers
+        const showAlert = (msg) => {
+            alertText.innerHTML = msg;
+            alertContainer.classList.remove('hidden');
+            window.scrollTo({ top: alertContainer.offsetTop - 20, behavior: 'smooth' });
+        };
+        const hideAlert = () => alertContainer.classList.add('hidden');
+        
+        const setUIState = (state) => {
+            if (state === 'loading') {
+                hideAlert();
+                previewContainer.classList.add('hidden');
+                exportContainer.classList.add('hidden');
+                loaderContainer.classList.remove('hidden');
+                loaderContainer.classList.add('flex');
+                loadBtn.disabled = true;
+            } else {
+                loaderContainer.classList.add('hidden');
+                loaderContainer.classList.remove('flex');
+                loadBtn.disabled = false;
             }
-          }
-        } catch (gfError) {
-          // מניה שנכשלה בשני המקורות פשוט תישאר ריקה בטבלה
-        } finally {
-          // חובה להשמיד את הגיליון הזמני כדי למנוע הצפת חשבון הדרייב
-          if (tempSpreadsheetFile) {
-            tempSpreadsheetFile.setTrashed(true);
-          }
-        }
-      }
-    }
+        };
 
-    // --- 4. בניית מערך הנתונים המשולב (Wide Format / Pivot Table) ---
-    // חילוץ כל התאריכים הייחודיים שנאספו ומיון כרונולוגי
-    const allDates = Object.keys(dateMap).sort((a, b) => new Date(a) - new Date(b));
-    
-    // יצירת שורת הכותרות: "תאריך" ולאחריו כל סימולי המניות
-    const combinedData = [ ["תאריך"].concat(tickersArray) ];
+        // Validate Form Data
+        const validateInputs = () => {
+            const tickers = elTickers.value.trim();
+            const start = elStartDate.value;
+            const end = elEndDate.value;
 
-    // בניית שורות הנתונים
-    for (let i = 0; i < allDates.length; i++) {
-      const currentDate = allDates[i];
-      const row = [currentDate];
-      
-      // איסוף המחיר של כל מניה באותו תאריך (או תא ריק אם חסר)
-      for (let j = 0; j < tickersArray.length; j++) {
-        const tkr = tickersArray[j];
-        row.push(dateMap[currentDate][tkr] || "");
-      }
-      
-      combinedData.push(row);
-    }
+            if (!tickers) return "נא להזין לפחות סימול מניה אחד.";
+            if (!start || !end) return "יש לבחור תאריכי התחלה וסיום.";
+            
+            const startObj = new Date(start);
+            const endObj = new Date(end);
+            
+            if (startObj > endObj) return "אופס! נראה שתאריך ההתחלה מאוחר מתאריך הסיום...";
+            
+            return null; // Valid
+        };
 
-    let resultJSON = {};
+        // Render Table
+        const renderTable = (csvStr) => {
+            const lines = csvStr.trim().split('\n');
+            const rowCount = Math.min(7, lines.length); // Header + 6
+            let html = '';
 
-    // --- 5. טיפול בפעולה (Action) המבוקשת ---
-    if (action === 'csv') {
-      // המרת המערך הדו-ממדי למחרוזת CSV עם הגנה על תאים בעייתיים
-      const csvString = combinedData.map(row => {
-        return row.map(cell => {
-          let str = String(cell);
-          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            str = '"' + str.replace(/"/g, '""') + '"';
-          }
-          return str;
-        }).join(",");
-      }).join("\n");
+            for (let i = 0; i < rowCount; i++) {
+                if (!lines[i]) continue;
+                // Basic CSV parsing
+                let rowData = lines[i].split(',').map(cell => cell.replace(/^"|"$/g, ''));
+                
+                if (i === 0) {
+                    html += `<thead class="bg-slate-800/80 text-indigo-300 uppercase text-xs tracking-wider border-b border-slate-700/50"><tr>`;
+                    rowData.forEach(cell => html += `<th class="px-6 py-5 font-bold">${cell}</th>`);
+                    html += `</tr></thead><tbody class="divide-y divide-slate-800/50">`;
+                } else {
+                    html += `<tr class="hover:bg-slate-800/40 transition-colors">`;
+                    rowData.forEach((cell, idx) => {
+                        const isNumber = !isNaN(cell) && cell !== "";
+                        const colorClass = isNumber ? "text-cyan-100" : "text-slate-300";
+                        html += `<td class="px-6 py-4 whitespace-nowrap font-mono ${colorClass}">${cell || '-'}</td>`;
+                    });
+                    html += `</tr>`;
+                }
+            }
+            html += `</tbody>`;
+            dataTable.innerHTML = html;
+        };
 
-      resultJSON = {
-        "status": "success",
-        "csvData": csvString
-      };
+        // MAIN ACTION: Load Data
+        loadBtn.addEventListener('click', async () => {
+            const validationError = validateInputs();
+            if (validationError) {
+                showAlert(validationError);
+                return;
+            }
 
-    } else if (action === 'sheet') {
-      // יצירת גיליון תוצאה והזנת המערך
-      const resultSpreadsheet = SpreadsheetApp.create("מחירי סגירה - נתונים היסטוריים");
-      const resultSheet = resultSpreadsheet.getSheets()[0];
-      
-      if (combinedData.length > 0) {
-        resultSheet.getRange(1, 1, combinedData.length, combinedData[0].length).setValues(combinedData);
-        // עיצוב אסתטי לכותרת
-        resultSheet.getRange(1, 1, 1, combinedData[0].length).setFontWeight("bold").setBackground("#f3f4f6");
-      }
+            setUIState('loading');
+            loaderText.innerText = "מושך נתוני שוק...";
 
-      resultJSON = {
-        "status": "success",
-        "sheetUrl": resultSpreadsheet.getUrl()
-      };
+            // MANDATORY EXACT CODE FOR PAYLOAD
+            const payload = {
+                tickers: document.getElementById('tickers').value,
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                frequency: document.getElementById('frequency').value,
+                action: 'csv'
+            };
 
-    } else {
-      throw new Error("Invalid action parameter. Must be 'csv' or 'sheet'.");
-    }
+            try {
+                // Fetch logic mapping EXACTLY to backend requirements
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
 
-    // --- 6. החזרת התשובה ללקוח ---
-    return ContentService.createTextOutput(JSON.stringify(resultJSON))
-                         .setMimeType(ContentService.MimeType.JSON);
+                if (!response.ok) throw new Error(`HTTP שגיאה: ${response.status}`);
+                
+                const data = await response.json();
 
-  } catch (error) {
-    // בלוק השגיאות הראשי - מחזיר אובייקט JSON נקי כדי למנוע שגיאות CORS במסך הלקוח
-    return ContentService.createTextOutput(JSON.stringify({
-      "status": "error",
-      "message": error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+                if (data.status === 'success' && data.csvData) {
+                    globalCsvData = data.csvData;
+                    renderTable(globalCsvData);
+                    setUIState('idle');
+                    previewContainer.classList.remove('hidden');
+                    exportContainer.classList.remove('hidden');
+                } else {
+                    throw new Error(data.message || "שגיאה לא ידועה התקבלה מהשרת.");
+                }
+            } catch (err) {
+                setUIState('idle');
+                showAlert(`<strong>שגיאת תקשורת:</strong><br><span class="dir-ltr inline-block text-left">${err.message}</span>`);
+            }
+        });
+
+        // EXPORT ACTION: CSV Blob Download
+        btnCsv.addEventListener('click', () => {
+            if (!globalCsvData) return;
+            const blob = new Blob([globalCsvData], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `market_data_export_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // EXPORT ACTION: Google Sheets
+        btnSheet.addEventListener('click', async () => {
+            // Re-validate just in case
+            if (validateInputs()) return;
+            
+            setUIState('loading');
+            loaderText.innerText = "מייצר גיליון Google Sheets במערכת...";
+
+            const payload = {
+                tickers: elTickers.value,
+                startDate: elStartDate.value,
+                endDate: elEndDate.value,
+                frequency: elFrequency.value,
+                action: 'sheet' // Triggering sheet creation
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success' && data.sheetUrl) {
+                    setUIState('idle');
+                    // Transform the Export Container into a Success Card
+                    exportContainer.innerHTML = `
+                        <div class="bg-emerald-900/40 border border-emerald-500/50 rounded-2xl p-8 text-center backdrop-blur-sm animate-slide-up shadow-xl">
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/20 mb-4">
+                                <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            </div>
+                            <h3 class="text-3xl font-bold text-white mb-2 tracking-wide">הגיליון נוצר בהצלחה!</h3>
+                            <p class="text-emerald-100/80 mb-6 font-medium">הנתונים יובאו לגיליון חדש בחשבון ה-Google שלך.</p>
+                            <a href="${data.sheetUrl}" target="_blank" class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold py-3 px-8 rounded-xl transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+                                פתח את הגיליון כעת
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            </a>
+                        </div>
+                    `;
+                    exportContainer.classList.remove('hidden');
+                } else {
+                    throw new Error(data.message || "Unknown error creating sheet.");
+                }
+            } catch (err) {
+                setUIState('idle');
+                exportContainer.classList.remove('hidden');
+                showAlert(`<strong>שגיאה ביצירת הגיליון:</strong><br><span class="dir-ltr inline-block text-left">${err.message}</span>`);
+            }
+        });
+    </script>
+</body>
+</html>
